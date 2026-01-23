@@ -342,3 +342,102 @@ body {
   background: linear-gradient(90deg, var(--surface-secondary) 0%, transparent 100%);
   border-top: 1px solid var(--border);
 }
+
+/* Touch-friendly targets */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Touch action buttons - shown on mobile when task selected */
+.touch-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--surface-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.touch-action-btn:hover,
+.touch-action-btn:active {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.touch-action-btn-danger:hover,
+.touch-action-btn-danger:active {
+  background: var(--priority-p0);
+  color: #000;
+  border-color: var(--priority-p0);
+}
+
+/* Priority touch buttons */
+.priority-touch-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  border: 2px solid transparent;
+  transition: all 0.15s ease;
+  opacity: 0.5;
+}
+
+.priority-touch-btn.active {
+  opacity: 1;
+  border-color: currentColor;
+}
+
+.priority-touch-btn:active {
+  transform: scale(0.95);
+}
+
+.priority-touch-btn.p0 {
+  background: var(--priority-p0);
+  color: #000;
+}
+
+.priority-touch-btn.p1 {
+  background: var(--priority-p1);
+  color: #000;
+}
+
+.priority-touch-btn.p2 {
+  background: var(--priority-p2);
+  color: #000;
+}
+
+.priority-touch-btn.p3 {
+  background: var(--surface-tertiary);
+  color: var(--text-muted);
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 768px) {
+  /* Larger touch targets for checkboxes */
+  .checkbox {
+    width: 28px;
+    height: 28px;
+  }
+  
+  /* More padding for task items */
+  .task-item {
+    padding: 16px;
+  }
+  
+  /* Larger priority badges */
+  .priority-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+}

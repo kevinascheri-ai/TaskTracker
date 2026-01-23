@@ -1,6 +1,6 @@
 'use client'
 
-import { Task, getLinkLabel } from '@/types'
+import { Task, getLinkLabel, Priority } from '@/types'
 import { useApp } from '@/lib/context'
 
 interface TaskItemProps {
@@ -16,25 +16,53 @@ export function TaskItem({
   onSelect,
   isReadOnly = false,
 }: TaskItemProps) {
-  const { toggleTaskDone, today } = useApp()
+  const { 
+    toggleTaskDone, 
+    updateTask,
+    setEditingTask,
+    setDeletingTask,
+    setLinkingTask,
+    today 
+  } = useApp()
 
   const isDone = task.status === 'done'
   const isCarryover = task.dayCreated < today && !isDone
-  const hasLink = !!task.link
 
-  const handleToggle = (e: React.MouseEvent) => {
+  const handleToggle = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation()
     if (!isReadOnly) {
       toggleTaskDone(task.id)
     }
   }
 
-  const handleLinkClick = (e: React.MouseEvent) => {
+  const handleLinkClick = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation()
     if (task.link) {
       window.open(task.link, '_blank', 'noopener,noreferrer')
     }
   }
+
+  const handleEdit = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation()
+    setEditingTask(task)
+  }
+
+  const handleDelete = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation()
+    setDeletingTask(task)
+  }
+
+  const handleAddLink = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation()
+    setLinkingTask(task)
+  }
+
+  const handlePriorityChange = (e: React.MouseEvent | React.TouchEvent, newPriority: Priority) => {
+    e.stopPropagation()
+    updateTask(task.id, { priority: newPriority })
+  }
+
+  const priorities: Priority[] = ['p0', 'p1', 'p2', 'p3']
 
   return (
     <div
@@ -47,11 +75,12 @@ export function TaskItem({
       tabIndex={0}
       aria-selected={isSelected}
     >
-      {/* Checkbox */}
+      {/* Checkbox - larger touch target */}
       <button
         onClick={handleToggle}
+        onTouchEnd={handleToggle}
         disabled={isReadOnly}
-        className={`checkbox flex items-center justify-center mt-0.5 ${isDone ? 'checked' : ''} ${
+        className={`checkbox flex items-center justify-center mt-0.5 min-w-[24px] min-h-[24px] ${isDone ? 'checked' : ''} ${
           isReadOnly ? 'cursor-default opacity-50' : ''
         }`}
         aria-label={isDone ? 'Mark as incomplete' : 'Mark as complete'}
@@ -88,9 +117,10 @@ export function TaskItem({
         </div>
         
         {/* Link - shown below task title */}
-        {hasLink && (
+        {task.link && (
           <button
             onClick={handleLinkClick}
+            onTouchEnd={handleLinkClick}
             className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover transition-colors group/link"
           >
             <svg 
@@ -105,7 +135,7 @@ export function TaskItem({
               <path d="M5 7l2-2M4.5 8.5l-1 1a1.5 1.5 0 01-2.12-2.12l1-1M7.5 3.5l1-1a1.5 1.5 0 012.12 2.12l-1 1" />
             </svg>
             <span className="group-hover/link:underline">
-              {getLinkLabel(task.link!)}
+              {getLinkLabel(task.link)}
             </span>
             <svg 
               width="10" 
@@ -119,6 +149,53 @@ export function TaskItem({
               <path d="M3 1h6v6M9 1L4 6" />
             </svg>
           </button>
+        )}
+
+        {/* Touch Action Bar - shown when selected on mobile */}
+        {isSelected && !isReadOnly && (
+          <div className="flex items-center gap-2 mt-3 md:hidden">
+            <button
+              onClick={handleEdit}
+              className="touch-action-btn"
+              aria-label="Edit task"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M10 2l2 2-8 8H2v-2l8-8z" />
+              </svg>
+            </button>
+            <button
+              onClick={handleAddLink}
+              className="touch-action-btn"
+              aria-label="Add link"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M6 8l2-2M5.5 9.5l-1 1a2 2 0 01-2.83-2.83l1-1M8.5 4.5l1-1a2 2 0 012.83 2.83l-1 1" />
+              </svg>
+            </button>
+            <button
+              onClick={handleDelete}
+              className="touch-action-btn touch-action-btn-danger"
+              aria-label="Delete task"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 4h8M5 4V3h4v1M6 6v4M8 6v4M4 4l.5 7h5l.5-7" />
+              </svg>
+            </button>
+            {!isDone && (
+              <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border">
+                {priorities.map((p) => (
+                  <button
+                    key={p}
+                    onClick={(e) => handlePriorityChange(e, p)}
+                    className={`priority-touch-btn ${p} ${task.priority === p ? 'active' : ''}`}
+                    aria-label={`Set priority ${p}`}
+                  >
+                    {p.charAt(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
