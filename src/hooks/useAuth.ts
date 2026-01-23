@@ -1,18 +1,27 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { User, AuthError } from '@supabase/supabase-js'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { User, AuthError, SupabaseClient } from '@supabase/supabase-js'
 import { getSupabase } from '@/lib/supabase'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const supabaseRef = useRef<SupabaseClient | null>(null)
 
-  const supabase = getSupabase()
-
-  // Check current session on mount
+  // Initialize Supabase client on mount (client-side only)
   useEffect(() => {
+    try {
+      supabaseRef.current = getSupabase()
+    } catch (err) {
+      console.error('Failed to initialize Supabase:', err)
+      setLoading(false)
+      return
+    }
+
+    const supabase = supabaseRef.current
+
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
@@ -37,10 +46,13 @@ export function useAuth() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [])
 
   // Sign up with email/password
   const signUp = useCallback(async (email: string, password: string) => {
+    const supabase = supabaseRef.current
+    if (!supabase) return { success: false, error: 'Not initialized' }
+    
     setError(null)
     setLoading(true)
     
@@ -60,10 +72,13 @@ export function useAuth() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [])
 
   // Sign in with email/password
   const signIn = useCallback(async (email: string, password: string) => {
+    const supabase = supabaseRef.current
+    if (!supabase) return { success: false, error: 'Not initialized' }
+    
     setError(null)
     setLoading(true)
     
@@ -83,10 +98,13 @@ export function useAuth() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [])
 
   // Sign out
   const signOut = useCallback(async () => {
+    const supabase = supabaseRef.current
+    if (!supabase) return { success: false, error: 'Not initialized' }
+    
     setError(null)
     
     try {
@@ -99,7 +117,7 @@ export function useAuth() {
       setError(message)
       return { success: false, error: message }
     }
-  }, [supabase])
+  }, [])
 
   // Clear error
   const clearError = useCallback(() => {
