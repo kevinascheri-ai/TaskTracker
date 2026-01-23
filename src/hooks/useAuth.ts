@@ -12,15 +12,16 @@ export function useAuth() {
 
   // Initialize Supabase client on mount (client-side only)
   useEffect(() => {
+    let supabase: SupabaseClient
+    
     try {
-      supabaseRef.current = getSupabase()
+      supabase = getSupabase()
+      supabaseRef.current = supabase
     } catch (err) {
       console.error('Failed to initialize Supabase:', err)
       setLoading(false)
       return
     }
-
-    const supabase = supabaseRef.current
 
     const getSession = async () => {
       try {
@@ -37,7 +38,7 @@ export function useAuth() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setUser(session?.user ?? null)
         setLoading(false)
       }
