@@ -3,12 +3,19 @@
 import { createContext, useContext, ReactNode, useState, useCallback } from 'react'
 import { useStore, StoreType } from '@/hooks/useStore'
 import { useToast, ToastType } from '@/hooks/useToast'
+import { useAuth } from '@/hooks/useAuth'
 import { Task } from '@/types'
+import { User } from '@supabase/supabase-js'
 
 interface AppContextType extends StoreType, ToastType {
+  // Auth
+  user: User | null
+  authLoading: boolean
+  signOut: () => Promise<{ success: boolean; error?: string }>
+  
+  // UI State
   showSettings: boolean
   setShowSettings: (show: boolean) => void
-  // Modal states
   showAddModal: boolean
   setShowAddModal: (show: boolean) => void
   editingTask: Task | null
@@ -22,8 +29,10 @@ interface AppContextType extends StoreType, ToastType {
 const AppContext = createContext<AppContextType | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const store = useStore()
+  const { user, loading: authLoading, signOut } = useAuth()
+  const store = useStore(user?.id ?? null)
   const toast = useToast()
+  
   const [showSettings, setShowSettings] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -31,11 +40,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [linkingTask, setLinkingTask] = useState<Task | null>(null)
 
   // Enhanced task toggle with toast
-  const handleToggleTask = useCallback((taskId: string) => {
+  const handleToggleTask = useCallback(async (taskId: string) => {
     const task = store.tasks.find((t) => t.id === taskId)
     if (!task) return null
 
-    const result = store.toggleTaskDone(taskId)
+    const result = await store.toggleTaskDone(taskId)
     
     if (result && task.status === 'todo') {
       // Was todo, now done
@@ -52,6 +61,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppContextType = {
     ...store,
     ...toast,
+    user,
+    authLoading,
+    signOut,
     showSettings,
     setShowSettings,
     showAddModal,

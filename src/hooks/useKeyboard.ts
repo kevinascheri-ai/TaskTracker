@@ -9,9 +9,9 @@ interface UseKeyboardProps {
   doneTasks: Task[]
   selectedTaskId: string | null
   setSelectedTaskId: (id: string | null) => void
-  updateTask: (id: string, updates: Partial<Task>) => Task | null
-  toggleTaskDone: (id: string) => Task | null
-  reorderTask: (id: string, direction: 'up' | 'down') => boolean
+  updateTask: (id: string, updates: Partial<Task>) => Promise<Task | null>
+  toggleTaskDone: (id: string) => Promise<Task | null>
+  reorderTask: (id: string, direction: 'up' | 'down') => Promise<boolean>
   onAddTask: () => void
   onEditTask: (task: Task) => void
   onDeleteTask: (task: Task) => void

@@ -13,9 +13,15 @@ export function DayHeader() {
     goToToday,
     carryoverCount,
     setShowSettings,
+    user,
+    signOut,
   } = useApp()
 
   const canGoNext = selectedDate < today
+
+  const handleSignOut = async () => {
+    await signOut()
+  }
 
   return (
     <header 
@@ -23,7 +29,7 @@ export function DayHeader() {
       style={{ zIndex: 20 }}
     >
       <div className="max-w-2xl mx-auto px-4 py-4">
-        {/* Top row: Logo + Settings */}
+        {/* Top row: Logo + User Menu */}
         <div className="flex items-center justify-between mb-4">
           <h1 
             className="text-2xl text-text-primary flex items-center gap-3"
@@ -42,16 +48,38 @@ export function DayHeader() {
             TRACKER
           </h1>
           
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-text-muted hover:text-accent transition-colors"
-            aria-label="Settings"
-          >
-            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="11" cy="11" r="3" />
-              <path d="M11 1v3M11 18v3M1 11h3M18 11h3M3.93 3.93l2.12 2.12M15.95 15.95l2.12 2.12M3.93 18.07l2.12-2.12M15.95 6.05l2.12-2.12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* User email indicator */}
+            {user && (
+              <span className="text-xs text-text-muted truncate max-w-[120px] hidden sm:block">
+                {user.email}
+              </span>
+            )}
+            
+            {/* Settings button */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-text-muted hover:text-accent transition-colors"
+              aria-label="Settings"
+            >
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="11" cy="11" r="3" />
+                <path d="M11 1v3M11 18v3M1 11h3M18 11h3M3.93 3.93l2.12 2.12M15.95 15.95l2.12 2.12M3.93 18.07l2.12-2.12M15.95 6.05l2.12-2.12" />
+              </svg>
+            </button>
+
+            {/* Sign out button */}
+            <button
+              onClick={handleSignOut}
+              className="p-2 text-text-muted hover:text-priority-p0 transition-colors"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M15 3h4v16h-4M10 11h10M17 8l3 3-3 3" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Day navigation */}

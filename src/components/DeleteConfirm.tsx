@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, KeyboardEvent } from 'react'
+import { useState, useEffect, KeyboardEvent } from 'react'
 import { Task } from '@/types'
 import { useApp } from '@/lib/context'
 
@@ -11,11 +11,19 @@ interface DeleteConfirmProps {
 
 export function DeleteConfirm({ task, onClose }: DeleteConfirmProps) {
   const { deleteTask, addToast } = useApp()
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const handleDelete = () => {
-    deleteTask(task.id)
-    addToast('Task deleted', 'info')
-    onClose()
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteTask(task.id)
+      addToast('Task deleted', 'info')
+      onClose()
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      addToast('Failed to delete task', 'error')
+      setIsDeleting(false)
+    }
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -23,15 +31,12 @@ export function DeleteConfirm({ task, onClose }: DeleteConfirmProps) {
       e.preventDefault()
       onClose()
     }
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleDelete()
-    }
   }
 
   // Focus trap
   useEffect(() => {
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (isDeleting) return
       if (e.key === 'Escape') {
         onClose()
       }
@@ -41,7 +46,7 @@ export function DeleteConfirm({ task, onClose }: DeleteConfirmProps) {
     }
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [])
+  }, [isDeleting])
 
   return (
     <div
@@ -75,14 +80,16 @@ export function DeleteConfirm({ task, onClose }: DeleteConfirmProps) {
           <button
             onClick={onClose}
             className="btn-secondary flex-1 py-2"
+            disabled={isDeleting}
           >
             Cancel
           </button>
           <button
             onClick={handleDelete}
             className="btn-danger flex-1 py-2"
+            disabled={isDeleting}
           >
-            Delete
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
 

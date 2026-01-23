@@ -4,79 +4,123 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Task, Settings, getToday, Priority } from '@/types'
 import { tasksApi, settingsApi } from '@/lib/storage'
 
-// Custom hook for managing app state with localStorage persistence
-export function useStore() {
+// Custom hook for managing app state with Supabase persistence
+export function useStore(userId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [settings, setSettings] = useState<Settings>({ theme: 'default', quackOnComplete: false })
   const [selectedDate, setSelectedDate] = useState<string>(getToday())
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   const today = getToday()
   const isViewingToday = selectedDate === today
   const isReadOnly = !isViewingToday
 
-  // Load data on mount
+  // Load data when user changes
   useEffect(() => {
-    setTasks(tasksApi.getAll())
-    setSettings(settingsApi.get())
-    setIsLoaded(true)
-  }, [])
+    if (!userId) {
+      setTasks([])
+      setSettings({ theme: 'default', quackOnComplete: false })
+      setIsLoaded(true)
+      return
+    }
+
+    const loadData = async () => {
+      setIsSyncing(true)
+      try {
+        const [tasksData, settingsData] = await Promise.all([
+          tasksApi.getAll(userId),
+          settingsApi.get(userId),
+        ])
+        setTasks(tasksData)
+        setSettings(settingsData)
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setIsLoaded(true)
+        setIsSyncing(false)
+      }
+    }
+
+    loadData()
+  }, [userId])
 
   // Refresh data from storage
-  const refresh = useCallback(() => {
-    setTasks(tasksApi.getAll())
-  }, [])
+  const refresh = useCallback(async () => {
+    if (!userId) return
+    setIsSyncing(true)
+    try {
+      const tasksData = await tasksApi.getAll(userId)
+      setTasks(tasksData)
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [userId])
 
   // Task operations
-  const createTask = useCallback((title: string, priority: Priority = 'p2') => {
-    const task = tasksApi.create({
+  const createTask = useCallback(async (title: string, priority: Priority = 'p2') => {
+    if (!userId) return null
+    
+    const order = await tasksApi.getNextOrder(userId)
+    const task = await tasksApi.create(userId, {
       title,
       status: 'todo',
       priority,
-      order: tasksApi.getNextOrder(),
+      order,
     })
-    refresh()
+    
+    if (task) {
+      setTasks(prev => [...prev, task])
+    }
     return task
-  }, [refresh])
+  }, [userId])
 
-  const updateTask = useCallback((id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'dayCreated'>>) => {
-    const task = tasksApi.update(id, updates)
-    refresh()
+  const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'dayCreated'>>) => {
+    const task = await tasksApi.update(id, updates)
+    if (task) {
+      setTasks(prev => prev.map(t => t.id === id ? task : t))
+    }
     return task
-  }, [refresh])
+  }, [])
 
-  const deleteTask = useCallback((id: string) => {
-    const success = tasksApi.delete(id)
+  const deleteTask = useCallback(async (id: string) => {
+    const success = await tasksApi.delete(id)
     if (success) {
-      refresh()
+      setTasks(prev => prev.filter(t => t.id !== id))
       if (selectedTaskId === id) {
         setSelectedTaskId(null)
       }
     }
     return success
-  }, [refresh, selectedTaskId])
+  }, [selectedTaskId])
 
-  const toggleTaskDone = useCallback((id: string) => {
+  const toggleTaskDone = useCallback(async (id: string) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return null
     
     const newStatus = task.status === 'done' ? 'todo' : 'done'
-    return updateTask(id, { status: newStatus })
+    const completedAt = newStatus === 'done' ? new Date().toISOString() : undefined
+    
+    return updateTask(id, { status: newStatus, completedAt })
   }, [tasks, updateTask])
 
-  const reorderTask = useCallback((taskId: string, direction: 'up' | 'down') => {
-    const success = tasksApi.reorder(taskId, direction)
-    if (success) refresh()
+  const reorderTask = useCallback(async (taskId: string, direction: 'up' | 'down') => {
+    if (!userId) return false
+    const success = await tasksApi.reorder(taskId, userId, direction)
+    if (success) {
+      await refresh()
+    }
     return success
-  }, [refresh])
+  }, [userId, refresh])
 
   // Settings operations
-  const updateSettings = useCallback((updates: Partial<Settings>) => {
-    const updated = settingsApi.update(updates)
+  const updateSettings = useCallback(async (updates: Partial<Settings>) => {
+    if (!userId) return settings
+    const updated = await settingsApi.update(userId, updates)
     setSettings(updated)
     return updated
-  }, [])
+  }, [userId, settings])
 
   // Navigation
   const goToToday = useCallback(() => {
@@ -153,11 +197,6 @@ export function useStore() {
       })
   }, [currentTasks])
 
-  // Days with tasks (for navigation)
-  const daysWithTasks = useMemo(() => {
-    return tasksApi.getDaysWithTasks()
-  }, [tasks])
-
   // Carryover count (tasks from previous days)
   const carryoverCount = useMemo(() => {
     if (selectedDate !== today) return 0
@@ -173,13 +212,13 @@ export function useStore() {
     isLoaded,
     isReadOnly,
     isViewingToday,
+    isSyncing,
     today,
 
     // Computed
     currentTasks,
     todoTasks,
     doneTasks,
-    daysWithTasks,
     carryoverCount,
 
     // Setters

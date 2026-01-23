@@ -13,6 +13,7 @@ interface TaskModalProps {
 export function TaskModal({ mode, task, onClose }: TaskModalProps) {
   const { createTask, updateTask, addToast } = useApp()
   const [title, setTitle] = useState(task?.title || '')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const isEdit = mode === 'edit'
@@ -25,22 +26,29 @@ export function TaskModal({ mode, task, onClose }: TaskModalProps) {
     }
   }, [isEdit])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmedTitle = title.trim()
     if (!trimmedTitle) {
       inputRef.current?.focus()
       return
     }
 
-    if (isEdit && task) {
-      updateTask(task.id, { title: trimmedTitle })
-      addToast('Task updated', 'success')
-    } else {
-      createTask(trimmedTitle, 'p2') // Default priority, user sets after with 1-4 keys
-      addToast('Task added', 'success')
+    setIsSubmitting(true)
+    try {
+      if (isEdit && task) {
+        await updateTask(task.id, { title: trimmedTitle })
+        addToast('Task updated', 'success')
+      } else {
+        await createTask(trimmedTitle, 'p2') // Default priority, user sets after with 1-4 keys
+        addToast('Task added', 'success')
+      }
+      onClose()
+    } catch (error) {
+      console.error('Error saving task:', error)
+      addToast('Failed to save task', 'error')
+    } finally {
+      setIsSubmitting(false)
     }
-
-    onClose()
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -78,6 +86,7 @@ export function TaskModal({ mode, task, onClose }: TaskModalProps) {
           <button
             onClick={onClose}
             className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            disabled={isSubmitting}
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 5l10 10M15 5l-10 10" />
@@ -93,13 +102,14 @@ export function TaskModal({ mode, task, onClose }: TaskModalProps) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !isSubmitting) {
                 e.preventDefault()
                 handleSubmit()
               }
             }}
             placeholder="What needs to get done?"
             className="input-field w-full px-4 py-3 text-base"
+            disabled={isSubmitting}
           />
           
           {!isEdit && (
@@ -118,14 +128,16 @@ export function TaskModal({ mode, task, onClose }: TaskModalProps) {
             <button
               onClick={onClose}
               className="btn-secondary px-6 py-2"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               className="btn-primary px-6 py-2"
+              disabled={isSubmitting}
             >
-              {isEdit ? 'Update' : 'Add'}
+              {isSubmitting ? 'Saving...' : isEdit ? 'Update' : 'Add'}
             </button>
           </div>
         </div>

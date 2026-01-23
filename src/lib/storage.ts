@@ -1,273 +1,223 @@
-import { Task, StorageData, Settings, getToday } from '@/types'
+import { Task, Settings, getToday } from '@/types'
+import { getSupabase } from './supabase'
 
-// Storage keys
-const STORAGE_KEYS = {
-  DATA: 'task-tracker-data',
-  SETTINGS: 'task-tracker-settings',
-} as const
-
-// Abstract storage interface for future swapping to IndexedDB
-interface StorageInterface {
-  getData(): StorageData
-  setData(data: StorageData): void
-  getSettings(): Settings
-  setSettings(settings: Settings): void
-}
-
-// Default settings
-const DEFAULT_SETTINGS: Settings = {
-  theme: 'default',
-  quackOnComplete: false,
-}
-
-// Default empty data
-const DEFAULT_DATA: StorageData = {
-  tasks: [],
-}
-
-// Seed data - sample tasks for first-time users
-const SEED_DATA: StorageData = {
-  tasks: [
-    {
-      id: 'task-1',
-      title: 'Review design mockups',
-      status: 'todo',
-      priority: 'p1',
-      order: 0,
-      createdAt: new Date().toISOString(),
-      dayCreated: getToday(),
-    },
-    {
-      id: 'task-2',
-      title: 'Update brand assets',
-      status: 'todo',
-      priority: 'p2',
-      order: 1,
-      createdAt: new Date().toISOString(),
-      dayCreated: getToday(),
-    },
-    {
-      id: 'task-3',
-      title: 'Ship landing page',
-      status: 'todo',
-      priority: 'p0',
-      order: 2,
-      createdAt: new Date().toISOString(),
-      dayCreated: getToday(),
-    },
-  ],
-}
-
-// localStorage implementation
-class LocalStorageAdapter implements StorageInterface {
-  private isClient = typeof window !== 'undefined'
-
-  getData(): StorageData {
-    if (!this.isClient) return DEFAULT_DATA
-
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.DATA)
-      if (!raw) {
-        // First time user - seed with sample data
-        this.setData(SEED_DATA)
-        return SEED_DATA
-      }
-      return JSON.parse(raw) as StorageData
-    } catch {
-      return DEFAULT_DATA
-    }
-  }
-
-  setData(data: StorageData): void {
-    if (!this.isClient) return
-    localStorage.setItem(STORAGE_KEYS.DATA, JSON.stringify(data))
-  }
-
-  getSettings(): Settings {
-    if (!this.isClient) return DEFAULT_SETTINGS
-
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS)
-      if (!raw) return DEFAULT_SETTINGS
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
-    } catch {
-      return DEFAULT_SETTINGS
-    }
-  }
-
-  setSettings(settings: Settings): void {
-    if (!this.isClient) return
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings))
+// Convert database row to Task type
+function rowToTask(row: any): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    priority: row.priority,
+    link: row.link || undefined,
+    order: row.order_index,
+    createdAt: row.created_at,
+    completedAt: row.completed_at || undefined,
+    dayCreated: row.day_created,
   }
 }
 
-// Export singleton instance
-export const storage = new LocalStorageAdapter()
-
-// Utility: Generate unique IDs
-export function generateId(prefix: string = 'id'): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
-
-// CRUD Operations for Tasks
+// CRUD Operations for Tasks (Supabase)
 export const tasksApi = {
-  getAll(): Task[] {
-    return storage.getData().tasks
-  },
+  async getAll(userId: string): Promise<Task[]> {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('order_index', { ascending: true })
 
-  getById(id: string): Task | undefined {
-    return storage.getData().tasks.find((t) => t.id === id)
-  },
-
-  // Get tasks for today's view: today's tasks + incomplete tasks from previous days
-  getTodayTasks(): Task[] {
-    const today = getToday()
-    const allTasks = storage.getData().tasks
-    
-    return allTasks.filter((t) => {
-      // Include if created today
-      if (t.dayCreated === today) return true
-      // Include if from previous day AND still incomplete
-      if (t.dayCreated < today && t.status === 'todo') return true
-      return false
-    })
-  },
-
-  // Get tasks for a specific past day (read-only view)
-  // Shows tasks that were completed on that day
-  getTasksForDay(date: string): Task[] {
-    const today = getToday()
-    
-    // If it's today, use getTodayTasks
-    if (date === today) {
-      return this.getTodayTasks()
+    if (error) {
+      console.error('Error fetching tasks:', error)
+      return []
     }
-    
-    // For past days, show tasks that were completed on that day
-    const allTasks = storage.getData().tasks
-    
-    return allTasks.filter((t) => {
-      // Task was completed on this specific day
-      if (t.completedAt) {
-        const completedDay = t.completedAt.split('T')[0]
-        if (completedDay === date) return true
-      }
-      return false
-    })
+
+    return (data || []).map(rowToTask)
   },
 
-  create(data: Omit<Task, 'id' | 'createdAt' | 'dayCreated'>): Task {
+  async create(userId: string, task: Omit<Task, 'id' | 'createdAt' | 'dayCreated'>): Promise<Task | null> {
+    const supabase = getSupabase()
     const now = new Date().toISOString()
-    const task: Task = {
-      ...data,
-      id: generateId('task'),
-      createdAt: now,
-      dayCreated: getToday(),
+    const today = getToday()
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: userId,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        link: task.link || null,
+        order_index: task.order,
+        day_created: today,
+        created_at: now,
+        completed_at: null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating task:', error)
+      return null
     }
-    const storageData = storage.getData()
-    storageData.tasks.push(task)
-    storage.setData(storageData)
-    return task
+
+    return rowToTask(data)
   },
 
-  update(id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'dayCreated'>>): Task | null {
-    const storageData = storage.getData()
-    const index = storageData.tasks.findIndex((t) => t.id === id)
-    if (index === -1) return null
+  async update(taskId: string, updates: Partial<Task>): Promise<Task | null> {
+    const supabase = getSupabase()
+    
+    const updateData: any = {}
+    if (updates.title !== undefined) updateData.title = updates.title
+    if (updates.status !== undefined) updateData.status = updates.status
+    if (updates.priority !== undefined) updateData.priority = updates.priority
+    if (updates.link !== undefined) updateData.link = updates.link || null
+    if (updates.order !== undefined) updateData.order_index = updates.order
+    if (updates.completedAt !== undefined) updateData.completed_at = updates.completedAt || null
 
-    const wasNotDone = storageData.tasks[index].status !== 'done'
-    const isNowDone = updates.status === 'done'
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(updateData)
+      .eq('id', taskId)
+      .select()
+      .single()
 
-    storageData.tasks[index] = {
-      ...storageData.tasks[index],
-      ...updates,
-      // Set completedAt when marking as done
-      completedAt: wasNotDone && isNowDone 
-        ? new Date().toISOString() 
-        : updates.status === 'todo' 
-          ? undefined 
-          : storageData.tasks[index].completedAt,
+    if (error) {
+      console.error('Error updating task:', error)
+      return null
     }
-    storage.setData(storageData)
-    return storageData.tasks[index]
+
+    return rowToTask(data)
   },
 
-  delete(id: string): boolean {
-    const storageData = storage.getData()
-    const index = storageData.tasks.findIndex((t) => t.id === id)
-    if (index === -1) return false
+  async delete(taskId: string): Promise<boolean> {
+    const supabase = getSupabase()
+    
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
 
-    storageData.tasks.splice(index, 1)
-    storage.setData(storageData)
+    if (error) {
+      console.error('Error deleting task:', error)
+      return false
+    }
+
     return true
   },
 
-  // Reorder task within its status group
-  reorder(taskId: string, direction: 'up' | 'down'): boolean {
-    const storageData = storage.getData()
-    const task = storageData.tasks.find((t) => t.id === taskId)
-    if (!task) return false
-
-    // Get tasks in same status group, sorted by order
+  async getNextOrder(userId: string): Promise<number> {
+    const supabase = getSupabase()
     const today = getToday()
-    const todayTasks = storageData.tasks
-      .filter((t) => {
-        if (t.dayCreated === today) return true
-        if (t.dayCreated < today && t.status === 'todo') return true
-        return false
-      })
-      .filter((t) => t.status === task.status)
-      .sort((a, b) => a.order - b.order)
+    
+    const { data } = await supabase
+      .from('tasks')
+      .select('order_index')
+      .eq('user_id', userId)
+      .eq('status', 'todo')
+      .or(`day_created.eq.${today},and(day_created.lt.${today},status.eq.todo)`)
+      .order('order_index', { ascending: false })
+      .limit(1)
 
-    const currentIndex = todayTasks.findIndex((t) => t.id === taskId)
+    if (data && data.length > 0) {
+      return data[0].order_index + 1
+    }
+    return 0
+  },
+
+  async reorder(taskId: string, userId: string, direction: 'up' | 'down'): Promise<boolean> {
+    const supabase = getSupabase()
+    
+    // Get current task
+    const { data: currentTask } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('id', taskId)
+      .single()
+
+    if (!currentTask) return false
+
+    // Get tasks in same status group
+    const today = getToday()
+    const { data: tasks } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', currentTask.status)
+      .order('order_index', { ascending: true })
+
+    if (!tasks) return false
+
+    // Filter to today's tasks + carryovers
+    const relevantTasks = tasks.filter((t: any) => {
+      if (t.day_created === today) return true
+      if (t.day_created < today && t.status === 'todo') return true
+      return false
+    })
+
+    const currentIndex = relevantTasks.findIndex((t: any) => t.id === taskId)
     const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
 
-    if (swapIndex < 0 || swapIndex >= todayTasks.length) return false
+    if (swapIndex < 0 || swapIndex >= relevantTasks.length) return false
 
     // Swap orders
-    const tempOrder = todayTasks[currentIndex].order
-    todayTasks[currentIndex].order = todayTasks[swapIndex].order
-    todayTasks[swapIndex].order = tempOrder
+    const currentOrder = relevantTasks[currentIndex].order_index
+    const swapOrder = relevantTasks[swapIndex].order_index
 
-    storage.setData(storageData)
+    await supabase
+      .from('tasks')
+      .update({ order_index: swapOrder })
+      .eq('id', relevantTasks[currentIndex].id)
+
+    await supabase
+      .from('tasks')
+      .update({ order_index: currentOrder })
+      .eq('id', relevantTasks[swapIndex].id)
+
     return true
-  },
-
-  // Get next order number for new tasks
-  getNextOrder(): number {
-    const tasks = this.getTodayTasks().filter((t) => t.status === 'todo')
-    return tasks.length > 0 ? Math.max(...tasks.map((t) => t.order)) + 1 : 0
-  },
-
-  // Get list of days that have tasks (for navigation)
-  getDaysWithTasks(): string[] {
-    const allTasks = storage.getData().tasks
-    const days = new Set<string>()
-    
-    allTasks.forEach((t) => {
-      days.add(t.dayCreated)
-      if (t.completedAt) {
-        days.add(t.completedAt.split('T')[0])
-      }
-    })
-    
-    // Always include today
-    days.add(getToday())
-    
-    return Array.from(days).sort().reverse()
   },
 }
 
-// Settings API
+// Settings API (Supabase)
 export const settingsApi = {
-  get(): Settings {
-    return storage.getSettings()
+  async get(userId: string): Promise<Settings> {
+    const supabase = getSupabase()
+    
+    const { data } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (data) {
+      return {
+        theme: 'default',
+        quackOnComplete: data.quack_on_complete,
+      }
+    }
+
+    // Create default settings if none exist
+    await supabase
+      .from('settings')
+      .insert({ user_id: userId, quack_on_complete: false })
+
+    return { theme: 'default', quackOnComplete: false }
   },
 
-  update(updates: Partial<Settings>): Settings {
-    const current = storage.getSettings()
-    const updated = { ...current, ...updates }
-    storage.setSettings(updated)
-    return updated
+  async update(userId: string, updates: Partial<Settings>): Promise<Settings> {
+    const supabase = getSupabase()
+    
+    const updateData: any = {}
+    if (updates.quackOnComplete !== undefined) {
+      updateData.quack_on_complete = updates.quackOnComplete
+    }
+
+    await supabase
+      .from('settings')
+      .upsert({ 
+        user_id: userId, 
+        ...updateData 
+      })
+
+    return this.get(userId)
   },
 }
