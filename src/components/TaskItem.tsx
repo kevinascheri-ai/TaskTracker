@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useRef } from 'react'
 import { Task, getLinkLabel, Priority } from '@/types'
 import { useApp } from '@/lib/context'
 
@@ -8,6 +9,10 @@ interface TaskItemProps {
   isSelected: boolean
   onSelect: () => void
   isReadOnly?: boolean
+  onDragStart?: (e: React.DragEvent, task: Task) => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent, task: Task) => void
+  onDragEnd?: () => void
 }
 
 export function TaskItem({
@@ -15,6 +20,10 @@ export function TaskItem({
   isSelected,
   onSelect,
   isReadOnly = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: TaskItemProps) {
   const { 
     toggleTaskDone, 
@@ -24,6 +33,9 @@ export function TaskItem({
     setLinkingTask,
     today 
   } = useApp()
+
+  const [showPriorityMenu, setShowPriorityMenu] = useState(false)
+  const priorityRef = useRef<HTMLDivElement>(null)
 
   const isDone = task.status === 'done'
   const isCarryover = task.dayCreated < today && !isDone
@@ -60,20 +72,49 @@ export function TaskItem({
   const handlePriorityChange = (e: React.MouseEvent | React.TouchEvent, newPriority: Priority) => {
     e.stopPropagation()
     updateTask(task.id, { priority: newPriority })
+    setShowPriorityMenu(false)
+  }
+
+  const handlePriorityClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!isReadOnly && !isDone) {
+      setShowPriorityMenu(!showPriorityMenu)
+    }
+  }
+
+  // Close priority menu when clicking outside
+  const handleBlur = () => {
+    setTimeout(() => setShowPriorityMenu(false), 150)
   }
 
   const priorities: Priority[] = ['p0', 'p1', 'p2', 'p3']
 
+  const handleDragStart = (e: React.DragEvent) => {
+    if (isReadOnly || isDone) {
+      e.preventDefault()
+      return
+    }
+    onDragStart?.(e, task)
+  }
+
   return (
     <div
       data-task-id={task.id}
-      className={`task-item group flex items-start gap-4 px-4 py-4 cursor-pointer ${
+      className={`task-item group flex items-start gap-3 px-4 py-4 cursor-pointer ${
         isSelected ? 'selected' : ''
       } ${isDone ? 'done' : ''}`}
       onClick={onSelect}
       role="button"
       tabIndex={0}
       aria-selected={isSelected}
+      draggable={!isReadOnly && !isDone}
+      onDragStart={handleDragStart}
+      onDragOver={(e) => {
+        e.preventDefault()
+        onDragOver?.(e)
+      }}
+      onDrop={(e) => onDrop?.(e, task)}
+      onDragEnd={onDragEnd}
     >
       {/* Checkbox - larger touch target */}
       <button
@@ -199,11 +240,53 @@ export function TaskItem({
         )}
       </div>
 
-      {/* Priority Badge */}
+      {/* Drag Handle - visible on hover (desktop) */}
+      {!isDone && !isReadOnly && (
+        <div className="hidden md:flex items-center opacity-0 group-hover:opacity-50 transition-opacity cursor-grab active:cursor-grabbing flex-shrink-0 mt-1">
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" className="text-text-muted">
+            <circle cx="3" cy="3" r="1.5" />
+            <circle cx="9" cy="3" r="1.5" />
+            <circle cx="3" cy="8" r="1.5" />
+            <circle cx="9" cy="8" r="1.5" />
+            <circle cx="3" cy="13" r="1.5" />
+            <circle cx="9" cy="13" r="1.5" />
+          </svg>
+        </div>
+      )}
+
+      {/* Priority Badge - clickable */}
       {!isDone && (
-        <span className={`priority-badge ${task.priority} flex-shrink-0 mt-0.5`}>
-          {task.priority}
-        </span>
+        <div className="relative flex-shrink-0 mt-0.5" ref={priorityRef} onBlur={handleBlur}>
+          <button
+            onClick={handlePriorityClick}
+            className={`priority-badge ${task.priority} ${!isReadOnly ? 'cursor-pointer hover:opacity-80' : ''}`}
+            disabled={isReadOnly}
+            aria-label={`Priority ${task.priority}, click to change`}
+          >
+            {task.priority}
+          </button>
+          
+          {/* Priority dropdown menu */}
+          {showPriorityMenu && !isReadOnly && (
+            <div 
+              className="absolute right-0 top-full mt-1 bg-surface-secondary border border-border shadow-lg z-50"
+              style={{ minWidth: '60px' }}
+            >
+              {priorities.map((p) => (
+                <button
+                  key={p}
+                  onClick={(e) => handlePriorityChange(e, p)}
+                  className={`w-full px-3 py-2 text-xs uppercase tracking-wider text-left hover:bg-surface transition-colors ${
+                    task.priority === p ? 'bg-surface text-accent' : 'text-text-primary'
+                  }`}
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

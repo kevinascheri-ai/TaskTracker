@@ -1,6 +1,7 @@
 'use client'
 
 import { useApp } from '@/lib/context'
+import { TIMEZONES, ROLLOVER_HOURS } from '@/types'
 
 export function Settings() {
   const { settings, updateSettings, showSettings, setShowSettings } = useApp()
@@ -17,14 +18,14 @@ export function Settings() {
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-md bg-surface-secondary border border-border"
+        className="relative w-full max-w-md bg-surface-secondary border border-border max-h-[90vh] overflow-y-auto"
         style={{
           clipPath: 'polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-surface-secondary z-10">
           <h2 
             className="text-xl text-text-primary"
             style={{ fontFamily: 'var(--font-display)', letterSpacing: '2px' }}
@@ -43,6 +44,63 @@ export function Settings() {
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {/* Day Settings */}
+          <div>
+            <h3 
+              className="text-sm text-text-muted mb-4 uppercase tracking-wider"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Day Settings
+            </h3>
+            
+            {/* Timezone */}
+            <div className="p-4 bg-surface rounded-sm space-y-4">
+              <div>
+                <label 
+                  className="block text-xs text-text-muted uppercase tracking-wider mb-2"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Timezone
+                </label>
+                <select
+                  value={settings.timezone}
+                  onChange={(e) => updateSettings({ timezone: e.target.value })}
+                  className="w-full px-3 py-2 bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent"
+                >
+                  {TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Rollover Time */}
+              <div>
+                <label 
+                  className="block text-xs text-text-muted uppercase tracking-wider mb-2"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Day Starts At
+                </label>
+                <select
+                  value={settings.dayRolloverHour}
+                  onChange={(e) => updateSettings({ dayRolloverHour: parseInt(e.target.value, 10) })}
+                  className="w-full px-3 py-2 bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent"
+                >
+                  {ROLLOVER_HOURS.map((hour) => (
+                    <option key={hour.value} value={hour.value}>
+                      {hour.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-text-muted mt-2">
+                  Tasks roll over to the new day at this time
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Celebration Mode Toggle */}
           <div className="flex items-center justify-between p-4 bg-surface rounded-sm">
             <div>
@@ -72,8 +130,8 @@ export function Settings() {
             </button>
           </div>
 
-          {/* Keyboard Shortcuts */}
-          <div>
+          {/* Keyboard Shortcuts - Hidden on mobile */}
+          <div className="hidden md:block">
             <h3 
               className="text-sm text-text-muted mb-4 uppercase tracking-wider"
               style={{ fontFamily: 'var(--font-display)' }}

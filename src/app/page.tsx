@@ -103,6 +103,20 @@ function AppContent() {
       
       <TaskList />
       <HotkeyBar />
+
+      {/* Floating Add Button - Mobile only */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 bg-accent text-black rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        style={{
+          boxShadow: '0 4px 20px rgba(0, 255, 136, 0.4)',
+        }}
+        aria-label="Add new task"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
       
       {/* Modals */}
       <Settings />

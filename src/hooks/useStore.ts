@@ -4,16 +4,35 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Task, Settings, getToday, Priority } from '@/types'
 import { tasksApi, settingsApi } from '@/lib/storage'
 
+// Default settings
+const DEFAULT_SETTINGS: Settings = {
+  theme: 'default',
+  quackOnComplete: false,
+  timezone: 'America/Los_Angeles',
+  dayRolloverHour: 17,
+}
+
 // Custom hook for managing app state with Supabase persistence
 export function useStore(userId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([])
-  const [settings, setSettings] = useState<Settings>({ theme: 'default', quackOnComplete: false })
-  const [selectedDate, setSelectedDate] = useState<string>(getToday())
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
 
-  const today = getToday()
+  // Compute today based on user's timezone and rollover settings
+  const today = useMemo(() => {
+    return getToday(settings.timezone, settings.dayRolloverHour)
+  }, [settings.timezone, settings.dayRolloverHour])
+  
+  // Initialize selectedDate when today changes or on first load
+  useEffect(() => {
+    if (!selectedDate || selectedDate === '') {
+      setSelectedDate(today)
+    }
+  }, [today, selectedDate])
+
   const isViewingToday = selectedDate === today
   const isReadOnly = !isViewingToday
 
@@ -21,7 +40,8 @@ export function useStore(userId: string | null) {
   useEffect(() => {
     if (!userId) {
       setTasks([])
-      setSettings({ theme: 'default', quackOnComplete: false })
+      setSettings(DEFAULT_SETTINGS)
+      setSelectedDate('')
       setIsLoaded(true)
       return
     }
@@ -35,6 +55,9 @@ export function useStore(userId: string | null) {
         ])
         setTasks(tasksData)
         setSettings(settingsData)
+        // Set selected date based on loaded settings
+        const userToday = getToday(settingsData.timezone, settingsData.dayRolloverHour)
+        setSelectedDate(userToday)
       } catch (error) {
         console.error('Error loading data:', error)
       } finally {
@@ -62,19 +85,19 @@ export function useStore(userId: string | null) {
   const createTask = useCallback(async (title: string, priority: Priority = 'p2') => {
     if (!userId) return null
     
-    const order = await tasksApi.getNextOrder(userId)
+    const order = await tasksApi.getNextOrder(userId, settings.timezone, settings.dayRolloverHour)
     const task = await tasksApi.create(userId, {
       title,
       status: 'todo',
       priority,
       order,
-    })
+    }, settings.timezone, settings.dayRolloverHour)
     
     if (task) {
       setTasks(prev => [...prev, task])
     }
     return task
-  }, [userId])
+  }, [userId, settings.timezone, settings.dayRolloverHour])
 
   const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'dayCreated'>>) => {
     const task = await tasksApi.update(id, updates)
@@ -107,12 +130,39 @@ export function useStore(userId: string | null) {
 
   const reorderTask = useCallback(async (taskId: string, direction: 'up' | 'down') => {
     if (!userId) return false
-    const success = await tasksApi.reorder(taskId, userId, direction)
+    const success = await tasksApi.reorder(taskId, userId, direction, settings.timezone, settings.dayRolloverHour)
     if (success) {
       await refresh()
     }
     return success
-  }, [userId, refresh])
+  }, [userId, refresh, settings.timezone, settings.dayRolloverHour])
+
+  // Reorder tasks by drag and drop
+  const reorderTaskToPosition = useCallback(async (taskId: string, newIndex: number, taskIds: string[]) => {
+    if (!userId) return false
+    
+    // Optimistically update the UI
+    const oldTasks = [...tasks]
+    const reorderedTasks = taskIds.map((id, index) => {
+      const task = tasks.find(t => t.id === id)
+      if (task) {
+        return { ...task, order: index }
+      }
+      return null
+    }).filter(Boolean) as Task[]
+    
+    setTasks(prev => {
+      const otherTasks = prev.filter(t => !taskIds.includes(t.id))
+      return [...otherTasks, ...reorderedTasks]
+    })
+    
+    const success = await tasksApi.reorderToPosition(taskId, userId, newIndex, taskIds)
+    if (!success) {
+      // Rollback on failure
+      setTasks(oldTasks)
+    }
+    return success
+  }, [userId, tasks])
 
   // Settings operations
   const updateSettings = useCallback(async (updates: Partial<Settings>) => {
@@ -230,6 +280,7 @@ export function useStore(userId: string | null) {
     deleteTask,
     toggleTaskDone,
     reorderTask,
+    reorderTaskToPosition,
 
     // Settings
     updateSettings,

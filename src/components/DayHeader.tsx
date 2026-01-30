@@ -1,7 +1,7 @@
 'use client'
 
 import { useApp } from '@/lib/context'
-import { formatDate, getToday } from '@/types'
+import { formatDate } from '@/types'
 
 export function DayHeader() {
   const {
@@ -15,6 +15,7 @@ export function DayHeader() {
     setShowSettings,
     user,
     signOut,
+    settings,
   } = useApp()
 
   const canGoNext = selectedDate < today
@@ -105,7 +106,7 @@ export function DayHeader() {
               }`}
               style={{ fontFamily: 'var(--font-display)', letterSpacing: '2px' }}
             >
-              {formatDate(selectedDate).toUpperCase()}
+              {formatDate(selectedDate, settings.timezone, settings.dayRolloverHour).toUpperCase()}
             </button>
             
             {isReadOnly && (

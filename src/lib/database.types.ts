@@ -44,16 +44,22 @@ export interface Database {
         Row: {
           user_id: string
           quack_on_complete: boolean
+          timezone: string
+          day_rollover_hour: number
           created_at: string
         }
         Insert: {
           user_id: string
           quack_on_complete?: boolean
+          timezone?: string
+          day_rollover_hour?: number
           created_at?: string
         }
         Update: {
           user_id?: string
           quack_on_complete?: boolean
+          timezone?: string
+          day_rollover_hour?: number
           created_at?: string
         }
       }

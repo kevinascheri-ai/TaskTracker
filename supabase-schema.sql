@@ -22,8 +22,23 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS settings (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   quack_on_complete BOOLEAN NOT NULL DEFAULT false,
+  timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles',
+  day_rollover_hour INTEGER NOT NULL DEFAULT 17,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration: Add timezone and day_rollover_hour columns if they don't exist
+-- Run this if you already have the settings table
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'settings' AND column_name = 'timezone') THEN
+    ALTER TABLE settings ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles';
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'settings' AND column_name = 'day_rollover_hour') THEN
+    ALTER TABLE settings ADD COLUMN day_rollover_hour INTEGER NOT NULL DEFAULT 17;
+  END IF;
+END $$;
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS tasks_user_id_idx ON tasks(user_id);

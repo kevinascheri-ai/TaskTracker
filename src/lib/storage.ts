@@ -34,10 +34,10 @@ export const tasksApi = {
     return (data || []).map(rowToTask)
   },
 
-  async create(userId: string, task: Omit<Task, 'id' | 'createdAt' | 'dayCreated'>): Promise<Task | null> {
+  async create(userId: string, task: Omit<Task, 'id' | 'createdAt' | 'dayCreated'>, timezone?: string, rolloverHour?: number): Promise<Task | null> {
     const supabase = getSupabase()
     const now = new Date().toISOString()
-    const today = getToday()
+    const today = getToday(timezone, rolloverHour)
 
     const { data, error } = await supabase
       .from('tasks')
@@ -105,9 +105,9 @@ export const tasksApi = {
     return true
   },
 
-  async getNextOrder(userId: string): Promise<number> {
+  async getNextOrder(userId: string, timezone?: string, rolloverHour?: number): Promise<number> {
     const supabase = getSupabase()
-    const today = getToday()
+    const today = getToday(timezone, rolloverHour)
     
     const { data } = await supabase
       .from('tasks')
@@ -124,7 +124,7 @@ export const tasksApi = {
     return 0
   },
 
-  async reorder(taskId: string, userId: string, direction: 'up' | 'down'): Promise<boolean> {
+  async reorder(taskId: string, userId: string, direction: 'up' | 'down', timezone?: string, rolloverHour?: number): Promise<boolean> {
     const supabase = getSupabase()
     
     // Get current task
@@ -137,7 +137,7 @@ export const tasksApi = {
     if (!currentTask) return false
 
     // Get tasks in same status group
-    const today = getToday()
+    const today = getToday(timezone, rolloverHour)
     const { data: tasks } = await supabase
       .from('tasks')
       .select('*')
@@ -175,6 +175,34 @@ export const tasksApi = {
 
     return true
   },
+
+  async reorderToPosition(taskId: string, userId: string, newIndex: number, taskIds: string[]): Promise<boolean> {
+    const supabase = getSupabase()
+    
+    // Update order_index for all tasks based on their new positions
+    const updates = taskIds.map((id, index) => 
+      supabase
+        .from('tasks')
+        .update({ order_index: index })
+        .eq('id', id)
+    )
+
+    try {
+      await Promise.all(updates)
+      return true
+    } catch (error) {
+      console.error('Error reordering tasks:', error)
+      return false
+    }
+  },
+}
+
+// Default settings
+const DEFAULT_SETTINGS: Settings = {
+  theme: 'default',
+  quackOnComplete: false,
+  timezone: 'America/Los_Angeles',
+  dayRolloverHour: 17, // 5pm PST
 }
 
 // Settings API (Supabase)
@@ -191,16 +219,23 @@ export const settingsApi = {
     if (data) {
       return {
         theme: 'default',
-        quackOnComplete: data.quack_on_complete,
+        quackOnComplete: data.quack_on_complete ?? false,
+        timezone: data.timezone ?? DEFAULT_SETTINGS.timezone,
+        dayRolloverHour: data.day_rollover_hour ?? DEFAULT_SETTINGS.dayRolloverHour,
       }
     }
 
     // Create default settings if none exist
     await supabase
       .from('settings')
-      .insert({ user_id: userId, quack_on_complete: false })
+      .insert({ 
+        user_id: userId, 
+        quack_on_complete: false,
+        timezone: DEFAULT_SETTINGS.timezone,
+        day_rollover_hour: DEFAULT_SETTINGS.dayRolloverHour,
+      })
 
-    return { theme: 'default', quackOnComplete: false }
+    return { ...DEFAULT_SETTINGS }
   },
 
   async update(userId: string, updates: Partial<Settings>): Promise<Settings> {
@@ -209,6 +244,12 @@ export const settingsApi = {
     const updateData: any = {}
     if (updates.quackOnComplete !== undefined) {
       updateData.quack_on_complete = updates.quackOnComplete
+    }
+    if (updates.timezone !== undefined) {
+      updateData.timezone = updates.timezone
+    }
+    if (updates.dayRolloverHour !== undefined) {
+      updateData.day_rollover_hour = updates.dayRolloverHour
     }
 
     await supabase
